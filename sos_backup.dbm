@@ -5,35 +5,31 @@ CAUTION: Do not modify this file unless you know what you are doing.
 -->
 <dbmodel pgmodeler-ver="0.9.1" last-position="0,0" last-zoom="1"
 	 default-schema="public" default-owner="postgres">
-<role name="WEB_ANON"
+<role name="web_anon"
+      encrypted="true"
+      password="********">
+</role>
+
+<role name="authenticated_user"
       inherit="true"
       encrypted="true"
       password="********">
 </role>
 
-<role name="AUTHENTICATED_USER"
-      inherit="true"
-      encrypted="true"
-      password="********">
+<role name="authenticator">
 </role>
 
-<role name="ADMIN"
-      inherit="true"
-      encrypted="true"
-      password="********">
-</role>
-
-<role name="SUPER_USER"
-      superuser="true"
-      inherit="true"
-      bypassrls="true"
-      encrypted="true"
-      password="********">
-</role>
-
-<database name="test" encoding="UTF8" lc-collate="English_United States.1252" lc-ctype="English_United States.1252" is-template="false" allow-conns="true">
+<database name="test" encoding="UTF8" lc-collate="English_United States.1252" lc-ctype="English_United States.1252" is-template="false" allow-conns="true" append-at-eod="true">
 	<role name="postgres"/>
 	<tablespace name="pg_default"/>
+	<appended-sql><![CDATA[GRANT web_anon TO authenticator;
+GRANT USAGE ON SCHEMA public, authentication TO web_anon;
+GRANT SELECT ON TABLE pg_authid, authentication.accounts TO web_anon;
+-- GRANT EXECUTE ON FUNCTION login(text,text) to anon;
+
+INSERT INTO authentication.accounts(
+            email_address, _password_, first_name, last_name)
+    VALUES ('coach1001@gmail.com', 'Soulreaver1', 'Francois', 'Weber')]]></appended-sql>
 </database>
 
 <schema name="public" rect-visible="true" fill-color="#e1e1e1" sql-disabled="true">
@@ -46,13 +42,13 @@ CAUTION: Do not modify this file unless you know what you are doing.
 <usertype name="token_type" configuration="enumeration">
 	<schema name="authentication"/>
 	<role name="postgres"/>
-	<enumeration values="VALIDATION,RESET_PASSWORD"/>
+	<enumeration values="validation,reset_password"/>
 </usertype>
 
 <usertype name="account_status" configuration="enumeration">
 	<schema name="authentication"/>
 	<role name="postgres"/>
-	<enumeration values="NOT_ACTIVATED,ACTIVATED,BANNED"/>
+	<enumeration values="not_activated,activated,banned"/>
 </usertype>
 
 <sequence name="tokens_id_seq"
@@ -73,7 +69,7 @@ CAUTION: Do not modify this file unless you know what you are doing.
 	<column name="user" not-null="true">
 		<type name="bigint" length="0"/>
 	</column>
-	<column name="token_type" not-null="true" default-value="'VALIDATION'">
+	<column name="token_type" not-null="true" default-value="'validation'">
 		<type name="authentication.token_type" length="0"/>
 	</column>
 	<column name="expires_at" not-null="true">
@@ -93,7 +89,7 @@ CAUTION: Do not modify this file unless you know what you are doing.
 <usertype name="account_roles" configuration="enumeration">
 	<schema name="authentication"/>
 	<role name="postgres"/>
-	<enumeration values="WEB_ANON,AUTHENTICATED_USER,ADMIN,SUPER_USER"/>
+	<enumeration values="web_anon,authenticated_user"/>
 </usertype>
 
 <sequence name="accounts_id_seq"
@@ -123,10 +119,10 @@ CAUTION: Do not modify this file unless you know what you are doing.
 	<column name="last_name" not-null="true">
 		<type name="character varying" length="255"/>
 	</column>
-	<column name="status" not-null="true" default-value="'NOT_ACTIVATED'">
+	<column name="status" not-null="true" default-value="'not_activated'">
 		<type name="authentication.account_status" length="0"/>
 	</column>
-	<column name="role" not-null="true" default-value="'WEB_ANON'">
+	<column name="role" not-null="true" default-value="'web_anon'">
 		<type name="authentication.account_roles" length="0"/>
 	</column>
 	<constraint name="pk_users" type="pk-constr" table="authentication.accounts">
@@ -134,6 +130,9 @@ CAUTION: Do not modify this file unless you know what you are doing.
 	</constraint>
 	<constraint name="uq_users_email_address" type="uq-constr" table="authentication.accounts">
 		<columns names="email_address" ref-type="src-columns"/>
+	</constraint>
+	<constraint name="ck_valid_email_address" type="ck-constr" table="authentication.accounts">
+			<expression><![CDATA[email_address ~* '^.+@.+\..+$' ]]></expression>
 	</constraint>
 </table>
 
@@ -172,7 +171,7 @@ CAUTION: Do not modify this file unless you know what you are doing.
 <usertype name="email_status" configuration="enumeration">
 	<schema name="authentication"/>
 	<role name="postgres"/>
-	<enumeration values="PROCESSING,AWAITING_RETRY,SENT,FAILED,AWAITING"/>
+	<enumeration values="processing,awaiting_retry,sent,failed,awaiting"/>
 </usertype>
 
 <sequence name="outgoing_emails_id_seq"
@@ -205,7 +204,7 @@ CAUTION: Do not modify this file unless you know what you are doing.
 	<column name="retries" not-null="true" default-value="0">
 		<type name="smallint" length="0"/>
 	</column>
-	<column name="email_status" not-null="true" default-value="'AWAITING'">
+	<column name="email_status" not-null="true" default-value="'awaiting'">
 		<type name="authentication.email_status" length="0"/>
 	</column>
 	<constraint name="pk_outgoing_emails" type="pk-constr" table="authentication.outgoing_emails">
@@ -396,20 +395,32 @@ SELECT
 	<role name="postgres"/>
 	<language name="plpgsql" sql-disabled="true"/>
 	<return-type>
-	<type name="smallint" length="1"/>
+	<type name="void" length="1"/>
 	</return-type>
-	<parameter name="_email_address">
-		<type name="character varying" length="0"/>
+	<parameter name="_email_address" in="true">
+		<type name="character varying" length="255"/>
 	</parameter>
-	<parameter name="_password">
-		<type name="character varying" length="0"/>
+	<parameter name="_password" in="true">
+		<type name="character varying" length="255"/>
 	</parameter>
-	<parameter name="_confirm_password">
-		<type name="character varying" length="0"/>
+	<parameter name="_confirm_password" in="true">
+		<type name="character varying" length="255"/>
 	</parameter>
-	<definition><![CDATA[
-SELECT * FROM authentication.accounts;
-]]></definition>
+	<parameter name="_first_name" in="true">
+		<type name="character varying" length="255"/>
+	</parameter>
+	<parameter name="_last_name" in="true">
+		<type name="character varying" length="255"/>
+	</parameter>
+	<definition><![CDATA[BEGIN
+	IF _password <> _confirm_password THEN
+		RAISE EXCEPTION 'PASSWORDS DO NOT MATCH';
+	ELSE
+		INSERT INTO authentication.accounts(
+            email_address, _password_, first_name, last_name)
+	    VALUES (_email_address, _password, _first_name, _last_name);
+	END IF;
+END;]]></definition>
 </function>
 
 <usertype name="jwt_token" configuration="composite">
@@ -434,10 +445,9 @@ SELECT * FROM authentication.accounts;
 	<return-type>
 	<type name="trigger" length="1"/>
 	</return-type>
-	<definition><![CDATA[
-BEGIN	
+	<definition><![CDATA[BEGIN	
 	IF NOT EXISTS (SELECT 1 FROM pg_roles AS r WHERE r.rolname::text = new.role::text) THEN
-    	RAISE foreign_key_violation USING message = 'UNKNOW ROLE' || new.role;
+    	RAISE foreign_key_violation USING message = 'UNKNOWN ROLE' || new.role;
     	RETURN null;
 	END IF;
   	RETURN new;
@@ -445,7 +455,7 @@ END;
 ]]></definition>
 </function>
 
-<trigger name="tg_check_if_role_exists" firing-type="AFTER" per-line="true" constraint="true"
+<trigger name="tg_check_if_role_exists" firing-type="AFTER" per-line="true" constraint="false"
 	 ins-event="true" del-event="false" upd-event="true" trunc-event="false"
 	 table="authentication.accounts">
 		<function signature="authentication.check_if_role_exists()"/>
@@ -495,14 +505,13 @@ END;
 	<return-type>
 	<type name="name" length="1"/>
 	</return-type>
-	<parameter name="_email_address">
+	<parameter name="_email_address" in="true">
 		<type name="text" length="0"/>
 	</parameter>
-	<parameter name="_password">
+	<parameter name="_password" in="true">
 		<type name="text" length="0"/>
 	</parameter>
-	<definition><![CDATA[
-BEGIN
+	<definition><![CDATA[BEGIN
 	RETURN (
 		SELECT ROLE FROM authentication.accounts
 		WHERE accounts.email_address = user_role._email_address
@@ -510,6 +519,50 @@ BEGIN
 		accounts._password_ = authentication.crypt(user_role._password, accounts._password_));
 END;
 ]]></definition>
+</function>
+
+<function name="sign_in"
+		window-func="false"
+		returns-setof="false"
+		behavior-type="CALLED ON NULL INPUT"
+		function-type="VOLATILE"
+		security-type="SECURITY INVOKER"
+		execution-cost="1"
+		row-amount="0">
+	<schema name="public"/>
+	<role name="postgres"/>
+	<language name="plpgsql" sql-disabled="true"/>
+	<return-type>
+	<type name="authentication.jwt_token" length="0"/>
+	</return-type>
+	<parameter name="_email_address" in="true">
+		<type name="character varying" length="255"/>
+	</parameter>
+	<parameter name="_password" in="true">
+		<type name="character varying" length="255"/>
+	</parameter>
+	<definition><![CDATA[DECLARE
+	_role name;
+	_account_state text;
+	result authentication.jwt_token;
+BEGIN
+	SELECT authentication.user_role(_email_address, _password) INTO _role;
+	SELECT status FROM authentication.accounts
+	WHERE email_address = _email_address INTO _account_state;		
+	IF _role IS NULL THEN
+    	RAISE invalid_password USING message = 'INVALID EMAIL ADDRESS OR PASSWORD';	
+	ELSIF _account_state <> 'activated' THEN
+		RAISE EXCEPTION 'ACCOUNT BANNED OR NOT VALIDATED';
+	ELSE
+		SET search_path TO authentication;
+  		SELECT sign(row_to_json(r), current_setting('app.settings.jwt_secret')) 
+		AS token FROM (
+	      SELECT _role AS role, sign_in._email_address as email_address,
+         extract(epoch FROM now())::integer + 60*60*24 AS exp) r
+	   	 INTO result;
+  		RETURN result;		
+	END IF;
+END;]]></definition>
 </function>
 
 <constraint name="fk_account_tokens" type="fk-constr" comparison-type="MATCH FULL"

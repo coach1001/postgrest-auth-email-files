@@ -1,0 +1,592 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<!--
+CAUTION: Do not modify this file unless you know what you are doing.
+         Unexpected results may occur if the code is changed deliberately.
+-->
+<dbmodel pgmodeler-ver="0.9.1" last-position="0,0" last-zoom="1"
+	 default-schema="public" default-owner="postgres">
+<role name="web_anon"
+      encrypted="true"
+      password="********">
+</role>
+
+<role name="authenticated_user"
+      inherit="true"
+      encrypted="true"
+      password="********">
+</role>
+
+<role name="authenticator">
+</role>
+
+<database name="test" encoding="UTF8" lc-collate="English_United States.1252" lc-ctype="English_United States.1252" is-template="false" allow-conns="true" append-at-eod="true">
+	<role name="postgres"/>
+	<tablespace name="pg_default"/>
+	<appended-sql><![CDATA[GRANT web_anon TO authenticator;
+GRANT USAGE ON SCHEMA public, authentication TO web_anon;
+GRANT SELECT ON TABLE pg_authid, authentication.accounts TO web_anon;
+-- GRANT EXECUTE ON FUNCTION login(text,text) to anon;
+
+INSERT INTO authentication.accounts(
+            email_address, _password_, first_name, last_name)
+    VALUES ('coach1001@gmail.com', 'Soulreaver1', 'Francois', 'Weber')]]></appended-sql>
+</database>
+
+<schema name="public" rect-visible="true" fill-color="#e1e1e1" sql-disabled="true">
+</schema>
+
+<schema name="authentication" rect-visible="true" fill-color="#83af1f">
+	<role name="postgres"/>
+</schema>
+
+<usertype name="token_type" configuration="enumeration">
+	<schema name="authentication"/>
+	<role name="postgres"/>
+	<enumeration values="validation,reset_password"/>
+</usertype>
+
+<usertype name="account_status" configuration="enumeration">
+	<schema name="authentication"/>
+	<role name="postgres"/>
+	<enumeration values="not_activated,activated,banned"/>
+</usertype>
+
+<sequence name="tokens_id_seq"
+	 start="1" increment="1"
+	 min-value="1" max-value="9223372036854775807"
+	 cache="1" cycle="false">
+	<schema name="authentication"/>
+	<role name="postgres"/>
+</sequence>
+
+<table name="tokens">
+	<schema name="authentication"/>
+	<role name="postgres"/>
+	<position x="60" y="60"/>
+	<column name="id" not-null="true" sequence="authentication.tokens_id_seq">
+		<type name="bigint" length="0"/>
+	</column>
+	<column name="user" not-null="true">
+		<type name="bigint" length="0"/>
+	</column>
+	<column name="token_type" not-null="true" default-value="'validation'">
+		<type name="authentication.token_type" length="0"/>
+	</column>
+	<column name="expires_at" not-null="true">
+		<type name="timestamp with time zone" length="0" with-timezone="true"/>
+	</column>
+	<column name="token" not-null="true">
+		<type name="character varying" length="255"/>
+	</column>
+	<column name="redeemed" not-null="true" default-value="false">
+		<type name="boolean" length="0"/>
+	</column>
+	<constraint name="pk_tokens" type="pk-constr" table="authentication.tokens">
+		<columns names="id" ref-type="src-columns"/>
+	</constraint>
+</table>
+
+<usertype name="account_roles" configuration="enumeration">
+	<schema name="authentication"/>
+	<role name="postgres"/>
+	<enumeration values="web_anon,authenticated_user"/>
+</usertype>
+
+<sequence name="accounts_id_seq"
+	 start="1" increment="1"
+	 min-value="1" max-value="9223372036854775807"
+	 cache="1" cycle="false">
+	<schema name="authentication"/>
+	<role name="postgres"/>
+</sequence>
+
+<table name="accounts">
+	<schema name="authentication"/>
+	<role name="postgres"/>
+	<position x="420" y="60"/>
+	<column name="id" not-null="true" sequence="authentication.accounts_id_seq">
+		<type name="bigint" length="0"/>
+	</column>
+	<column name="email_address" not-null="true">
+		<type name="character varying" length="255"/>
+	</column>
+	<column name="_password_" not-null="true">
+		<type name="text" length="0"/>
+	</column>
+	<column name="first_name" not-null="true">
+		<type name="character varying" length="255"/>
+	</column>
+	<column name="last_name" not-null="true">
+		<type name="character varying" length="255"/>
+	</column>
+	<column name="status" not-null="true" default-value="'not_activated'">
+		<type name="authentication.account_status" length="0"/>
+	</column>
+	<column name="role" not-null="true" default-value="'web_anon'">
+		<type name="authentication.account_roles" length="0"/>
+	</column>
+	<constraint name="pk_users" type="pk-constr" table="authentication.accounts">
+		<columns names="id" ref-type="src-columns"/>
+	</constraint>
+	<constraint name="uq_users_email_address" type="uq-constr" table="authentication.accounts">
+		<columns names="email_address" ref-type="src-columns"/>
+	</constraint>
+	<constraint name="ck_valid_email_address" type="ck-constr" table="authentication.accounts">
+			<expression><![CDATA[email_address ~* '^.+@.+\..+$' ]]></expression>
+	</constraint>
+</table>
+
+<sequence name="email_templates_id_seq"
+	 start="1" increment="1"
+	 min-value="1" max-value="9223372036854775807"
+	 cache="1" cycle="false">
+	<schema name="authentication"/>
+	<role name="postgres"/>
+</sequence>
+
+<table name="email_templates">
+	<schema name="authentication"/>
+	<role name="postgres"/>
+	<position x="820" y="60"/>
+	<column name="id" not-null="true" sequence="authentication.email_templates_id_seq">
+		<type name="bigint" length="0"/>
+	</column>
+	<column name="token_type" not-null="true">
+		<type name="authentication.token_type" length="0"/>
+	</column>
+	<column name="subject">
+		<type name="character varying" length="255"/>
+	</column>
+	<column name="body">
+		<type name="text" length="0"/>
+	</column>
+	<constraint name="pk_email_templates" type="pk-constr" table="authentication.email_templates">
+		<columns names="id" ref-type="src-columns"/>
+	</constraint>
+	<constraint name="uq_email_templates_token_types" type="uq-constr" table="authentication.email_templates">
+		<columns names="token_type" ref-type="src-columns"/>
+	</constraint>
+</table>
+
+<usertype name="email_status" configuration="enumeration">
+	<schema name="authentication"/>
+	<role name="postgres"/>
+	<enumeration values="processing,awaiting_retry,sent,failed,awaiting"/>
+</usertype>
+
+<sequence name="outgoing_emails_id_seq"
+	 start="1" increment="1"
+	 min-value="1" max-value="9223372036854775807"
+	 cache="1" cycle="false">
+	<schema name="authentication"/>
+	<role name="postgres"/>
+</sequence>
+
+<table name="outgoing_emails">
+	<schema name="authentication"/>
+	<role name="postgres"/>
+	<position x="1220" y="60"/>
+	<column name="id" not-null="true" sequence="authentication.outgoing_emails_id_seq">
+		<type name="bigint" length="0"/>
+	</column>
+	<column name="email_template" not-null="true">
+		<type name="bigint" length="0"/>
+	</column>
+	<column name="from" not-null="true">
+		<type name="character varying" length="255"/>
+	</column>
+	<column name="to" not-null="true">
+		<type name="character varying" length="255"/>
+	</column>
+	<column name="doc_tokens">
+		<type name="jsonb" length="0"/>
+	</column>
+	<column name="retries" not-null="true" default-value="0">
+		<type name="smallint" length="0"/>
+	</column>
+	<column name="email_status" not-null="true" default-value="'awaiting'">
+		<type name="authentication.email_status" length="0"/>
+	</column>
+	<constraint name="pk_outgoing_emails" type="pk-constr" table="authentication.outgoing_emails">
+		<columns names="id" ref-type="src-columns"/>
+	</constraint>
+</table>
+
+<extension name="pgcrypto" cur-version="1.3">
+	<schema name="authentication"/>
+	<comment><![CDATA[cryptographic functions]]></comment>
+</extension>
+
+<function name="url_encode"
+		window-func="false"
+		returns-setof="false"
+		behavior-type="CALLED ON NULL INPUT"
+		function-type="VOLATILE"
+		security-type="SECURITY INVOKER"
+		execution-cost="100"
+		row-amount="0">
+	<schema name="authentication"/>
+	<role name="postgres"/>
+	<language name="sql" sql-disabled="true"/>
+	<return-type>
+	<type name="text" length="1"/>
+	</return-type>
+	<parameter name="data">
+		<type name="bytea" length="0"/>
+	</parameter>
+	<definition><![CDATA[
+    SELECT translate(encode(data, 'base64'), E'+/=\n', '-_');
+]]></definition>
+</function>
+
+<function name="url_decode"
+		window-func="false"
+		returns-setof="false"
+		behavior-type="CALLED ON NULL INPUT"
+		function-type="VOLATILE"
+		security-type="SECURITY INVOKER"
+		execution-cost="100"
+		row-amount="0">
+	<schema name="authentication"/>
+	<role name="postgres"/>
+	<language name="sql" sql-disabled="true"/>
+	<return-type>
+	<type name="bytea" length="1"/>
+	</return-type>
+	<parameter name="data">
+		<type name="text" length="0"/>
+	</parameter>
+	<definition><![CDATA[
+WITH t AS (SELECT translate(data, '-_', '+/') AS trans),
+     rem AS (SELECT length(t.trans) % 4 AS remainder FROM t) -- compute padding size
+    SELECT decode(
+        t.trans ||
+        CASE WHEN rem.remainder > 0
+           THEN repeat('=', (4 - rem.remainder))
+           ELSE '' END,
+    'base64') FROM t, rem;
+]]></definition>
+</function>
+
+<function name="algorithm_sign"
+		window-func="false"
+		returns-setof="false"
+		behavior-type="CALLED ON NULL INPUT"
+		function-type="VOLATILE"
+		security-type="SECURITY INVOKER"
+		execution-cost="100"
+		row-amount="0">
+	<schema name="authentication"/>
+	<role name="postgres"/>
+	<language name="sql" sql-disabled="true"/>
+	<return-type>
+	<type name="text" length="1"/>
+	</return-type>
+	<parameter name="signables">
+		<type name="text" length="0"/>
+	</parameter>
+	<parameter name="secret">
+		<type name="text" length="0"/>
+	</parameter>
+	<parameter name="algorithm">
+		<type name="text" length="0"/>
+	</parameter>
+	<definition><![CDATA[
+WITH
+  alg AS (
+    SELECT CASE
+      WHEN algorithm = 'HS256' THEN 'sha256'
+      WHEN algorithm = 'HS384' THEN 'sha384'
+      WHEN algorithm = 'HS512' THEN 'sha512'
+      ELSE '' END AS id)  -- hmac throws error
+SELECT authentication.url_encode(hmac(signables, secret, alg.id)) FROM alg;
+]]></definition>
+</function>
+
+<function name="sign"
+		window-func="false"
+		returns-setof="false"
+		behavior-type="CALLED ON NULL INPUT"
+		function-type="VOLATILE"
+		security-type="SECURITY INVOKER"
+		execution-cost="100"
+		row-amount="0">
+	<schema name="authentication"/>
+	<role name="postgres"/>
+	<language name="sql" sql-disabled="true"/>
+	<return-type>
+	<type name="text" length="1"/>
+	</return-type>
+	<parameter name="payload">
+		<type name="json" length="0"/>
+	</parameter>
+	<parameter name="secret">
+		<type name="text" length="0"/>
+	</parameter>
+	<parameter name="algorithm" default-value="'HS256'::text">
+		<type name="text" length="0"/>
+	</parameter>
+	<definition><![CDATA[
+WITH
+  header AS (
+    SELECT  authentication.url_encode(convert_to('{"alg":"' || algorithm || '","typ":"JWT"}', 'utf8')) AS data
+    ),
+  payload AS (
+    SELECT authentication.url_encode(convert_to(payload::text, 'utf8')) AS data
+    ),
+  signables AS (
+    SELECT header.data || '.' || payload.data AS data FROM header, payload
+    )
+SELECT
+    signables.data || '.' ||
+    authentication.algorithm_sign(signables.data, secret, algorithm) FROM signables;
+]]></definition>
+</function>
+
+<function name="verify"
+		window-func="false"
+		returns-setof="true"
+		behavior-type="CALLED ON NULL INPUT"
+		function-type="VOLATILE"
+		security-type="SECURITY INVOKER"
+		execution-cost="100"
+		row-amount="1000">
+	<schema name="authentication"/>
+	<role name="postgres"/>
+	<language name="sql" sql-disabled="true"/>
+	<return-type>
+	<parameter name="header">
+		<type name="json" length="0"/>
+	</parameter>
+	<parameter name="payload">
+		<type name="json" length="0"/>
+	</parameter>
+	<parameter name="valid">
+		<type name="boolean" length="0"/>
+	</parameter>
+	</return-type>
+	<parameter name="token" in="true">
+		<type name="text" length="0"/>
+	</parameter>
+	<parameter name="secret" in="true">
+		<type name="text" length="0"/>
+	</parameter>
+	<parameter name="algorithm" in="true" default-value="'HS256'::text">
+		<type name="text" length="0"/>
+	</parameter>
+	<definition><![CDATA[
+  SELECT
+    convert_from(authentication.url_decode(r[1]), 'utf8')::json AS header,
+    convert_from(authentication.url_decode(r[2]), 'utf8')::json AS payload,
+    r[3] = authentication.algorithm_sign(r[1] || '.' || r[2], secret, algorithm) AS valid
+  FROM regexp_split_to_array(token, '\.') r;
+]]></definition>
+</function>
+
+<function name="sign_up"
+		window-func="false"
+		returns-setof="false"
+		behavior-type="STRICT"
+		function-type="VOLATILE"
+		security-type="SECURITY INVOKER"
+		execution-cost="1"
+		row-amount="0">
+	<schema name="public"/>
+	<role name="postgres"/>
+	<language name="plpgsql" sql-disabled="true"/>
+	<return-type>
+	<type name="void" length="1"/>
+	</return-type>
+	<parameter name="_email_address" in="true">
+		<type name="character varying" length="255"/>
+	</parameter>
+	<parameter name="_password" in="true">
+		<type name="character varying" length="255"/>
+	</parameter>
+	<parameter name="_confirm_password" in="true">
+		<type name="character varying" length="255"/>
+	</parameter>
+	<parameter name="_first_name" in="true">
+		<type name="character varying" length="255"/>
+	</parameter>
+	<parameter name="_last_name" in="true">
+		<type name="character varying" length="255"/>
+	</parameter>
+	<definition><![CDATA[BEGIN
+	IF _password <> _confirm_password THEN
+		RAISE EXCEPTION 'PASSWORDS DO NOT MATCH';
+	ELSE
+		INSERT INTO authentication.accounts(
+            email_address, _password_, first_name, last_name)
+	    VALUES (_email_address, _password, _first_name, _last_name);
+	END IF;
+END;]]></definition>
+</function>
+
+<usertype name="jwt_token" configuration="composite">
+	<schema name="authentication"/>
+	<role name="postgres"/>
+	<typeattrib name="token">
+		<type name="text" length="0"/>
+	</typeattrib>
+</usertype>
+
+<function name="check_if_role_exists"
+		window-func="false"
+		returns-setof="false"
+		behavior-type="STRICT"
+		function-type="VOLATILE"
+		security-type="SECURITY INVOKER"
+		execution-cost="1"
+		row-amount="0">
+	<schema name="authentication"/>
+	<role name="postgres"/>
+	<language name="plpgsql" sql-disabled="true"/>
+	<return-type>
+	<type name="trigger" length="1"/>
+	</return-type>
+	<definition><![CDATA[BEGIN	
+	IF NOT EXISTS (SELECT 1 FROM pg_roles AS r WHERE r.rolname::text = new.role::text) THEN
+    	RAISE foreign_key_violation USING message = 'UNKNOWN ROLE' || new.role;
+    	RETURN null;
+	END IF;
+  	RETURN new;
+END;
+]]></definition>
+</function>
+
+<trigger name="tg_check_if_role_exists" firing-type="AFTER" per-line="true" constraint="false"
+	 ins-event="true" del-event="false" upd-event="true" trunc-event="false"
+	 table="authentication.accounts">
+		<function signature="authentication.check_if_role_exists()"/>
+</trigger>
+
+<function name="encrypt_password"
+		window-func="false"
+		returns-setof="false"
+		behavior-type="STRICT"
+		function-type="VOLATILE"
+		security-type="SECURITY INVOKER"
+		execution-cost="1"
+		row-amount="0">
+	<schema name="authentication"/>
+	<role name="postgres"/>
+	<language name="plpgsql" sql-disabled="true"/>
+	<return-type>
+	<type name="trigger" length="1"/>
+	</return-type>
+	<definition><![CDATA[
+BEGIN  
+	IF TG_OP = 'INSERT' OR new._password_ <> old._password_ THEN
+    	new._password_ = authentication.crypt(new._password_, authentication.gen_salt('bf'));
+	END IF;
+	RETURN new;
+END;
+]]></definition>
+</function>
+
+<trigger name="tg_encrypt_password" firing-type="BEFORE" per-line="true" constraint="false"
+	 ins-event="true" del-event="false" upd-event="true" trunc-event="false"
+	 table="authentication.accounts">
+		<function signature="authentication.encrypt_password()"/>
+</trigger>
+
+<function name="user_role"
+		window-func="false"
+		returns-setof="false"
+		behavior-type="STRICT"
+		function-type="VOLATILE"
+		security-type="SECURITY INVOKER"
+		execution-cost="1"
+		row-amount="0">
+	<schema name="authentication"/>
+	<role name="postgres"/>
+	<language name="plpgsql" sql-disabled="true"/>
+	<return-type>
+	<type name="name" length="1"/>
+	</return-type>
+	<parameter name="_email_address" in="true">
+		<type name="text" length="0"/>
+	</parameter>
+	<parameter name="_password" in="true">
+		<type name="text" length="0"/>
+	</parameter>
+	<definition><![CDATA[BEGIN
+	RETURN (
+		SELECT ROLE FROM authentication.accounts
+		WHERE accounts.email_address = user_role._email_address
+		AND 
+		accounts._password_ = authentication.crypt(user_role._password, accounts._password_));
+END;
+]]></definition>
+</function>
+
+<function name="sign_in"
+		window-func="false"
+		returns-setof="false"
+		behavior-type="CALLED ON NULL INPUT"
+		function-type="VOLATILE"
+		security-type="SECURITY INVOKER"
+		execution-cost="1"
+		row-amount="0">
+	<schema name="public"/>
+	<role name="postgres"/>
+	<language name="plpgsql" sql-disabled="true"/>
+	<return-type>
+	<type name="authentication.jwt_token" length="0"/>
+	</return-type>
+	<parameter name="_email_address" in="true">
+		<type name="character varying" length="255"/>
+	</parameter>
+	<parameter name="_password" in="true">
+		<type name="character varying" length="255"/>
+	</parameter>
+	<definition><![CDATA[DECLARE
+	_role name;
+	_account_state text;
+	result authentication.jwt_token;
+BEGIN
+	SELECT authentication.user_role(_email_address, _password) INTO _role;
+	SELECT status FROM authentication.accounts
+	WHERE email_address = _email_address INTO _account_state;		
+	IF _role IS NULL THEN
+    	RAISE invalid_password USING message = 'INVALID EMAIL ADDRESS OR PASSWORD';	
+	ELSIF _account_state <> 'activated' THEN
+		RAISE EXCEPTION 'ACCOUNT BANNED OR NOT VALIDATED';
+	ELSE
+		SET search_path TO authentication;
+  		SELECT sign(row_to_json(r), current_setting('app.settings.jwt_secret')) 
+		AS token FROM (
+	      SELECT _role AS role, sign_in._email_address as email_address,
+         extract(epoch FROM now())::integer + 60*60*24 AS exp) r
+	   	 INTO result;
+  		RETURN result;		
+	END IF;
+END;]]></definition>
+</function>
+
+<constraint name="fk_account_tokens" type="fk-constr" comparison-type="MATCH FULL"
+	 upd-action="CASCADE" del-action="NO ACTION" ref-table="authentication.accounts" table="authentication.tokens">
+	<columns names="user" ref-type="src-columns"/>
+	<columns names="id" ref-type="dst-columns"/>
+</constraint>
+
+<constraint name="fk_template_outgoing_emails" type="fk-constr" comparison-type="MATCH FULL"
+	 upd-action="NO ACTION" del-action="NO ACTION" ref-table="authentication.email_templates" table="authentication.outgoing_emails">
+	<columns names="email_template" ref-type="src-columns"/>
+	<columns names="id" ref-type="dst-columns"/>
+</constraint>
+
+<relationship name="rel_tokens_accounts" type="relfk"
+	 custom-color="#5aa578"
+	 src-table="authentication.tokens"
+	 dst-table="authentication.accounts" reference-fk="fk_account_tokens"
+	 src-required="false" dst-required="false"/>
+
+<relationship name="rel_outgoing_emails_email_templates" type="relfk"
+	 custom-color="#4b3e56"
+	 src-table="authentication.outgoing_emails"
+	 dst-table="authentication.email_templates" reference-fk="fk_template_outgoing_emails"
+	 src-required="false" dst-required="false"/>
+
+</dbmodel>

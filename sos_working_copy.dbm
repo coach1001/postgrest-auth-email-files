@@ -3,7 +3,7 @@
 CAUTION: Do not modify this file unless you know what you are doing.
          Unexpected results may occur if the code is changed deliberately.
 -->
-<dbmodel pgmodeler-ver="0.9.1" last-position="0,0" last-zoom="1"
+<dbmodel pgmodeler-ver="0.9.1" last-position="443,0" last-zoom="1"
 	 default-schema="public" default-owner="postgres">
 <role name="web_anon"
       encrypted="true"
@@ -24,12 +24,44 @@ CAUTION: Do not modify this file unless you know what you are doing.
 	<tablespace name="pg_default"/>
 	<appended-sql><![CDATA[GRANT web_anon TO authenticator;
 GRANT USAGE ON SCHEMA public, authentication TO web_anon;
-GRANT SELECT ON TABLE pg_authid, authentication.accounts TO web_anon;
--- GRANT EXECUTE ON FUNCTION login(text,text) to anon;
 
-INSERT INTO authentication.accounts(
-            email_address, _password_, first_name, last_name)
-    VALUES ('coach1001@gmail.com', 'Soulreaver1', 'Francois', 'Weber')]]></appended-sql>
+GRANT SELECT ON TABLE pg_authid TO web_anon;
+
+GRANT SELECT ON TABLE authentication.accounts TO web_anon;
+GRANT SELECT ON TABLE authentication.tokens TO web_anon;
+GRANT SELECT ON TABLE authentication.outgoing_emails TO web_anon;
+GRANT SELECT ON TABLE authentication.email_templates TO web_anon;
+
+GRANT INSERT ON TABLE authentication.accounts TO web_anon;
+GRANT INSERT ON TABLE authentication.tokens TO web_anon;
+GRANT INSERT ON TABLE authentication.outgoing_emails TO web_anon;
+
+GRANT USAGE, SELECT ON SEQUENCE authentication.accounts_id_seq TO web_anon;
+GRANT USAGE, SELECT ON SEQUENCE authentication.tokens_id_seq TO web_anon;
+GRANT USAGE, SELECT ON SEQUENCE authentication.outgoing_emails_id_seq TO web_anon;
+
+GRANT EXECUTE ON FUNCTION 
+	sign_in(
+		character varying,
+		character varying
+	) to web_anon;
+
+GRANT EXECUTE ON FUNCTION 
+	sign_up(
+		character varying,
+		character varying,
+		character varying,
+		character varying,
+		character varying
+	) to web_anon;
+
+INSERT INTO authentication.email_templates(
+	token_type, subject, body)
+VALUES (
+	'validation', 
+	'{{appName}}, {{emailAddress}} - Account Validation', 
+	'{{firstName}} {{lastName}}, Your One Time Pin  is  {{token}}
+This token will expire at {{tokenExpiry}}');]]></appended-sql>
 </database>
 
 <schema name="public" rect-visible="true" fill-color="#e1e1e1" sql-disabled="true">
@@ -53,38 +85,10 @@ INSERT INTO authentication.accounts(
 
 <sequence name="tokens_id_seq"
 	 start="1" increment="1"
-	 min-value="1" max-value="9223372036854775807"
+	 min-value="-9223372036854775808" max-value="9223372036854775807"
 	 cache="1" cycle="false">
 	<schema name="authentication"/>
-	<role name="postgres"/>
 </sequence>
-
-<table name="tokens">
-	<schema name="authentication"/>
-	<role name="postgres"/>
-	<position x="60" y="60"/>
-	<column name="id" not-null="true" sequence="authentication.tokens_id_seq">
-		<type name="bigint" length="0"/>
-	</column>
-	<column name="user" not-null="true">
-		<type name="bigint" length="0"/>
-	</column>
-	<column name="token_type" not-null="true" default-value="'validation'">
-		<type name="authentication.token_type" length="0"/>
-	</column>
-	<column name="expires_at" not-null="true">
-		<type name="timestamp with time zone" length="0" with-timezone="true"/>
-	</column>
-	<column name="token" not-null="true">
-		<type name="character varying" length="255"/>
-	</column>
-	<column name="redeemed" not-null="true" default-value="false">
-		<type name="boolean" length="0"/>
-	</column>
-	<constraint name="pk_tokens" type="pk-constr" table="authentication.tokens">
-		<columns names="id" ref-type="src-columns"/>
-	</constraint>
-</table>
 
 <usertype name="account_roles" configuration="enumeration">
 	<schema name="authentication"/>
@@ -94,79 +98,17 @@ INSERT INTO authentication.accounts(
 
 <sequence name="accounts_id_seq"
 	 start="1" increment="1"
-	 min-value="1" max-value="9223372036854775807"
+	 min-value="-9223372036854775808" max-value="9223372036854775807"
 	 cache="1" cycle="false">
 	<schema name="authentication"/>
-	<role name="postgres"/>
 </sequence>
-
-<table name="accounts">
-	<schema name="authentication"/>
-	<role name="postgres"/>
-	<position x="420" y="60"/>
-	<column name="id" not-null="true" sequence="authentication.accounts_id_seq">
-		<type name="bigint" length="0"/>
-	</column>
-	<column name="email_address" not-null="true">
-		<type name="character varying" length="255"/>
-	</column>
-	<column name="_password_" not-null="true">
-		<type name="text" length="0"/>
-	</column>
-	<column name="first_name" not-null="true">
-		<type name="character varying" length="255"/>
-	</column>
-	<column name="last_name" not-null="true">
-		<type name="character varying" length="255"/>
-	</column>
-	<column name="status" not-null="true" default-value="'not_activated'">
-		<type name="authentication.account_status" length="0"/>
-	</column>
-	<column name="role" not-null="true" default-value="'web_anon'">
-		<type name="authentication.account_roles" length="0"/>
-	</column>
-	<constraint name="pk_users" type="pk-constr" table="authentication.accounts">
-		<columns names="id" ref-type="src-columns"/>
-	</constraint>
-	<constraint name="uq_users_email_address" type="uq-constr" table="authentication.accounts">
-		<columns names="email_address" ref-type="src-columns"/>
-	</constraint>
-	<constraint name="ck_valid_email_address" type="ck-constr" table="authentication.accounts">
-			<expression><![CDATA[email_address ~* '^.+@.+\..+$' ]]></expression>
-	</constraint>
-</table>
 
 <sequence name="email_templates_id_seq"
 	 start="1" increment="1"
-	 min-value="1" max-value="9223372036854775807"
+	 min-value="-9223372036854775808" max-value="9223372036854775807"
 	 cache="1" cycle="false">
 	<schema name="authentication"/>
-	<role name="postgres"/>
 </sequence>
-
-<table name="email_templates">
-	<schema name="authentication"/>
-	<role name="postgres"/>
-	<position x="820" y="60"/>
-	<column name="id" not-null="true" sequence="authentication.email_templates_id_seq">
-		<type name="bigint" length="0"/>
-	</column>
-	<column name="token_type" not-null="true">
-		<type name="authentication.token_type" length="0"/>
-	</column>
-	<column name="subject">
-		<type name="character varying" length="255"/>
-	</column>
-	<column name="body">
-		<type name="text" length="0"/>
-	</column>
-	<constraint name="pk_email_templates" type="pk-constr" table="authentication.email_templates">
-		<columns names="id" ref-type="src-columns"/>
-	</constraint>
-	<constraint name="uq_email_templates_token_types" type="uq-constr" table="authentication.email_templates">
-		<columns names="token_type" ref-type="src-columns"/>
-	</constraint>
-</table>
 
 <usertype name="email_status" configuration="enumeration">
 	<schema name="authentication"/>
@@ -176,41 +118,10 @@ INSERT INTO authentication.accounts(
 
 <sequence name="outgoing_emails_id_seq"
 	 start="1" increment="1"
-	 min-value="1" max-value="9223372036854775807"
+	 min-value="-9223372036854775808" max-value="9223372036854775807"
 	 cache="1" cycle="false">
 	<schema name="authentication"/>
-	<role name="postgres"/>
 </sequence>
-
-<table name="outgoing_emails">
-	<schema name="authentication"/>
-	<role name="postgres"/>
-	<position x="1220" y="60"/>
-	<column name="id" not-null="true" sequence="authentication.outgoing_emails_id_seq">
-		<type name="bigint" length="0"/>
-	</column>
-	<column name="email_template" not-null="true">
-		<type name="bigint" length="0"/>
-	</column>
-	<column name="from" not-null="true">
-		<type name="character varying" length="255"/>
-	</column>
-	<column name="to" not-null="true">
-		<type name="character varying" length="255"/>
-	</column>
-	<column name="doc_tokens">
-		<type name="jsonb" length="0"/>
-	</column>
-	<column name="retries" not-null="true" default-value="0">
-		<type name="smallint" length="0"/>
-	</column>
-	<column name="email_status" not-null="true" default-value="'awaiting'">
-		<type name="authentication.email_status" length="0"/>
-	</column>
-	<constraint name="pk_outgoing_emails" type="pk-constr" table="authentication.outgoing_emails">
-		<columns names="id" ref-type="src-columns"/>
-	</constraint>
-</table>
 
 <extension name="pgcrypto" cur-version="1.3">
 	<schema name="authentication"/>
@@ -412,13 +323,40 @@ SELECT
 	<parameter name="_last_name" in="true">
 		<type name="character varying" length="255"/>
 	</parameter>
-	<definition><![CDATA[BEGIN
+	<definition><![CDATA[DECLARE
+	validate_email_template_id bigint;
+	token_data authentication.tokens%ROWTYPE;
+	account_id  bigint;
+BEGIN
 	IF _password <> _confirm_password THEN
 		RAISE EXCEPTION 'PASSWORDS DO NOT MATCH';
 	ELSE
-		INSERT INTO authentication.accounts(
-            email_address, _password_, first_name, last_name)
-	    VALUES (_email_address, _password, _first_name, _last_name);
+		
+		INSERT INTO authentication.accounts(email_address, _password_, first_name, last_name)
+	    VALUES (_email_address, _password, _first_name, _last_name)
+		RETURNING id INTO account_id;
+
+		INSERT INTO authentication.tokens(account, token_type, expires_at, token)
+		VALUES (account_id,'validation', current_timestamp + (current_setting('app.settings.otp_lifetime_minutes')::integer * interval '1 minute'),to_char(floor(random() * 9999 + 1)::int, 'fm0000')) RETURNING * INTO token_data;
+	
+		SELECT id FROM authentication.email_templates WHERE token_type='validation' LIMIT 1 INTO validate_email_template_id;
+
+		INSERT INTO authentication.outgoing_emails(
+			email_template, _from_,  _to_, doc_tokens, email_status)
+		VALUES ( 
+			validate_email_template_id, 
+			current_setting('app.settings.app_admin_email'),
+			_email_address,
+			jsonb_build_object(
+				'emailAddress', _email_address,
+				'firstName', _first_name,
+				'lastName', _last_name,
+				'appName', current_setting('app.settings.app_name'),
+				'token', token_data.token,
+				'tokenExpiry', token_data.expires_at::text
+			),
+			'awaiting'
+		);		
 	END IF;
 END;]]></definition>
 </function>
@@ -455,12 +393,6 @@ END;
 ]]></definition>
 </function>
 
-<trigger name="tg_check_if_role_exists" firing-type="AFTER" per-line="true" constraint="false"
-	 ins-event="true" del-event="false" upd-event="true" trunc-event="false"
-	 table="authentication.accounts">
-		<function signature="authentication.check_if_role_exists()"/>
-</trigger>
-
 <function name="encrypt_password"
 		window-func="false"
 		returns-setof="false"
@@ -484,12 +416,6 @@ BEGIN
 END;
 ]]></definition>
 </function>
-
-<trigger name="tg_encrypt_password" firing-type="BEFORE" per-line="true" constraint="false"
-	 ins-event="true" del-event="false" upd-event="true" trunc-event="false"
-	 table="authentication.accounts">
-		<function signature="authentication.encrypt_password()"/>
-</trigger>
 
 <function name="user_role"
 		window-func="false"
@@ -565,9 +491,138 @@ BEGIN
 END;]]></definition>
 </function>
 
+<table name="tokens">
+	<schema name="authentication"/>
+	<role name="postgres"/>
+	<position x="60" y="120"/>
+	<column name="id" not-null="true" sequence="authentication.tokens_id_seq">
+		<type name="bigint" length="0"/>
+	</column>
+	<column name="account" not-null="true">
+		<type name="bigint" length="0"/>
+	</column>
+	<column name="token_type" not-null="true" default-value="'validation'">
+		<type name="authentication.token_type" length="0"/>
+	</column>
+	<column name="expires_at" not-null="true">
+		<type name="timestamp with time zone" length="0" with-timezone="true"/>
+	</column>
+	<column name="token" not-null="true">
+		<type name="text" length="255"/>
+	</column>
+	<column name="redeemed" not-null="true" default-value="false">
+		<type name="boolean" length="0"/>
+	</column>
+	<constraint name="pk_tokens" type="pk-constr" table="authentication.tokens">
+		<columns names="id" ref-type="src-columns"/>
+	</constraint>
+</table>
+
+<table name="email_templates">
+	<schema name="authentication"/>
+	<role name="postgres"/>
+	<position x="860" y="80"/>
+	<column name="id" not-null="true" sequence="authentication.email_templates_id_seq">
+		<type name="bigint" length="0"/>
+	</column>
+	<column name="token_type" not-null="true">
+		<type name="authentication.token_type" length="0"/>
+	</column>
+	<column name="subject">
+		<type name="character varying" length="255"/>
+	</column>
+	<column name="body">
+		<type name="text" length="0"/>
+	</column>
+	<constraint name="pk_email_templates" type="pk-constr" table="authentication.email_templates">
+		<columns names="id" ref-type="src-columns"/>
+	</constraint>
+	<constraint name="uq_email_templates_token_types" type="uq-constr" table="authentication.email_templates">
+		<columns names="token_type" ref-type="src-columns"/>
+	</constraint>
+</table>
+
+<table name="accounts">
+	<schema name="authentication"/>
+	<role name="postgres"/>
+	<position x="480" y="180"/>
+	<column name="id" not-null="true" sequence="authentication.accounts_id_seq">
+		<type name="bigint" length="0"/>
+	</column>
+	<column name="email_address" not-null="true">
+		<type name="character varying" length="255"/>
+	</column>
+	<column name="_password_" not-null="true">
+		<type name="text" length="0"/>
+	</column>
+	<column name="first_name" not-null="true">
+		<type name="character varying" length="255"/>
+	</column>
+	<column name="last_name" not-null="true">
+		<type name="character varying" length="255"/>
+	</column>
+	<column name="status" not-null="true" default-value="'not_activated'">
+		<type name="authentication.account_status" length="0"/>
+	</column>
+	<column name="role" not-null="true" default-value="'web_anon'">
+		<type name="authentication.account_roles" length="0"/>
+	</column>
+	<constraint name="pk_users" type="pk-constr" table="authentication.accounts">
+		<columns names="id" ref-type="src-columns"/>
+	</constraint>
+	<constraint name="uq_users_email_address" type="uq-constr" table="authentication.accounts">
+		<columns names="email_address" ref-type="src-columns"/>
+	</constraint>
+	<constraint name="ck_valid_email_address" type="ck-constr" table="authentication.accounts">
+			<expression><![CDATA[email_address ~* '^.+@.+\..+$' ]]></expression>
+	</constraint>
+</table>
+
+<table name="outgoing_emails">
+	<schema name="authentication"/>
+	<role name="postgres"/>
+	<position x="1240" y="240"/>
+	<column name="id" not-null="true" sequence="authentication.outgoing_emails_id_seq">
+		<type name="bigint" length="0"/>
+	</column>
+	<column name="email_template" not-null="true">
+		<type name="bigint" length="0"/>
+	</column>
+	<column name="_from_" not-null="true">
+		<type name="character varying" length="255"/>
+	</column>
+	<column name="_to_" not-null="true">
+		<type name="character varying" length="255"/>
+	</column>
+	<column name="doc_tokens">
+		<type name="jsonb" length="0"/>
+	</column>
+	<column name="retries" not-null="true" default-value="0">
+		<type name="smallint" length="0"/>
+	</column>
+	<column name="email_status" not-null="true" default-value="'awaiting'">
+		<type name="authentication.email_status" length="0"/>
+	</column>
+	<constraint name="pk_outgoing_emails" type="pk-constr" table="authentication.outgoing_emails">
+		<columns names="id" ref-type="src-columns"/>
+	</constraint>
+</table>
+
+<trigger name="tg_check_if_role_exists" firing-type="AFTER" per-line="true" constraint="false"
+	 ins-event="true" del-event="false" upd-event="true" trunc-event="false"
+	 table="authentication.accounts">
+		<function signature="authentication.check_if_role_exists()"/>
+</trigger>
+
+<trigger name="tg_encrypt_password" firing-type="BEFORE" per-line="true" constraint="false"
+	 ins-event="true" del-event="false" upd-event="true" trunc-event="false"
+	 table="authentication.accounts">
+		<function signature="authentication.encrypt_password()"/>
+</trigger>
+
 <constraint name="fk_account_tokens" type="fk-constr" comparison-type="MATCH FULL"
 	 upd-action="CASCADE" del-action="NO ACTION" ref-table="authentication.accounts" table="authentication.tokens">
-	<columns names="user" ref-type="src-columns"/>
+	<columns names="account" ref-type="src-columns"/>
 	<columns names="id" ref-type="dst-columns"/>
 </constraint>
 

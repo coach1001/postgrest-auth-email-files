@@ -3,7 +3,7 @@
 CAUTION: Do not modify this file unless you know what you are doing.
          Unexpected results may occur if the code is changed deliberately.
 -->
-<dbmodel pgmodeler-ver="0.9.1" last-position="32,0" last-zoom="1"
+<dbmodel pgmodeler-ver="0.9.1" last-position="209,0" last-zoom="1"
 	 default-schema="public" default-owner="postgres">
 <role name="web_anon"
       encrypted="true"
@@ -56,6 +56,14 @@ INSERT INTO authentication.email_templates(
 VALUES (
 	'validation', 
 	'{{appName}}, {{emailAddress}} - Account Validation', 
+	'{{firstName}} {{lastName}}, Your One Time Pin  is  {{token}}
+This token will expire at {{tokenExpiry}}');
+
+INSERT INTO authentication.email_templates(
+	token_type, subject, body)
+VALUES (
+	'reset_password', 
+	'{{appName}}, {{emailAddress}} - Account Password Reset', 
 	'{{firstName}} {{lastName}}, Your One Time Pin  is  {{token}}
 This token will expire at {{tokenExpiry}}');]]></appended-sql>
 </database>
@@ -320,9 +328,9 @@ SELECT
 		<type name="character varying" length="255"/>
 	</parameter>
 	<definition><![CDATA[DECLARE
-	validate_email_template_id bigint;
-	token_data authentication.tokens%ROWTYPE;
-	account_id  bigint;
+	_validate_email_template_id bigint;
+	_token_data authentication.tokens%ROWTYPE;
+	_account_id  bigint;
 BEGIN
 	IF _password <> _confirm_password THEN
 		RAISE EXCEPTION 'PASSWORDS DO NOT MATCH';
@@ -330,20 +338,20 @@ BEGIN
 		
 		INSERT INTO authentication.accounts(email_address, _password_, first_name, last_name)
 	    VALUES (_email_address, _password, _first_name, _last_name)
-		RETURNING id INTO account_id;
+		RETURNING id INTO _account_id;
 
 		INSERT INTO authentication.tokens(account, token_type, expires_at, token)
-		VALUES (account_id,'validation', current_timestamp + (current_setting('app.settings.otp_lifetime_minutes')::integer * interval '1 minute'),to_char(floor(random() * 9999 + 1)::int, 'fm0000')) 
-		RETURNING * INTO token_data;
+		VALUES (_account_id,'validation', current_timestamp + (current_setting('app.settings.otp_lifetime_minutes')::integer * interval '1 minute'),to_char(floor(random() * 9999 + 1)::int, 'fm0000')) 
+		RETURNING * INTO _token_data;
 	
-		SELECT id INTO validate_email_template_id 
+		SELECT id INTO _validate_email_template_id 
 		FROM authentication.email_templates 
 		WHERE token_type='validation' LIMIT 1;
 
 		INSERT INTO authentication.outgoing_emails(
 			email_template, _from_,  _to_, doc_tokens, email_status)
 		VALUES ( 
-			validate_email_template_id, 
+			_validate_email_template_id, 
 			current_setting('app.settings.app_admin_email'),
 			_email_address,
 			jsonb_build_object(
@@ -351,8 +359,8 @@ BEGIN
 				'firstName', _first_name,
 				'lastName', _last_name,
 				'appName', current_setting('app.settings.app_name'),
-				'token', token_data.token,
-				'tokenExpiry', token_data.expires_at::text
+				'token', _token_data.token,
+				'tokenExpiry', _token_data.expires_at::text
 			),
 			'awaiting'
 		);		
@@ -469,7 +477,7 @@ END;
 	<definition><![CDATA[DECLARE
 	_role name;
 	_account_state text;
-	result authentication.jwt_token;
+	_result authentication.jwt_token;
 	_account_id bigint;
 	_first_name text;
 	_last_name text;
@@ -490,8 +498,8 @@ BEGIN
 		AS token FROM (
 	      SELECT _role AS role, _account_id AS account_id, sign_in._email_address AS email_address,
          extract(epoch FROM now())::integer + 60*60*current_setting('app.settings.jwt_lifetime_hours')::integer AS exp) r
-	   	 INTO result;
-  		RETURN result;	
+	   	 INTO _result;
+  		RETURN _result;	
 	END IF;
 END;]]></definition>
 </function>
@@ -586,7 +594,7 @@ END;]]></definition>
 <table name="outgoing_emails">
 	<schema name="authentication"/>
 	<role name="postgres"/>
-	<position x="1240" y="240"/>
+	<position x="1360" y="240"/>
 	<column name="id" not-null="true" sequence="authentication.outgoing_emails_id_seq">
 		<type name="bigint" length="0"/>
 	</column>
@@ -662,6 +670,7 @@ BEGIN
 	SELECT id, token, expires_at INTO _token_id, __token, _expires_at
 	FROM authentication.tokens 
 	WHERE account = _account_id AND token_type = 'validation' AND redeemed = false
+	ORDER BY id DESC
 	LIMIT 1;
 
 	IF __token IS NULL THEN
@@ -675,6 +684,136 @@ BEGIN
 		WHERE id = _token_id;
 	ELSE		
 		RAISE EXCEPTION 'SOMETHING WENT WRONG WITH VALIDATING YOUR ACCOUNT';
+	END IF;
+	
+END;]]></definition>
+</function>
+
+<function name="request_reset_password"
+		window-func="false"
+		returns-setof="false"
+		behavior-type="CALLED ON NULL INPUT"
+		function-type="VOLATILE"
+		security-type="SECURITY INVOKER"
+		execution-cost="1"
+		row-amount="0">
+	<schema name="public"/>
+	<role name="postgres"/>
+	<language name="plpgsql" sql-disabled="true"/>
+	<return-type>
+	<type name="void" length="0"/>
+	</return-type>
+	<parameter name="_email_address" in="true">
+		<type name="character varying" length="0"/>
+	</parameter>
+	<definition><![CDATA[DECLARE
+	_validate_email_template_id bigint;
+	_token_data authentication.tokens%ROWTYPE;
+	_account_id  bigint;
+	_first_name character varying;
+	_last_name character varying;
+	_account_status authentication.account_status;
+BEGIN
+		
+	SELECT id, first_name, last_name, status 
+	INTO _account_id, _first_name, _last_name, _account_status
+	FROM authentication.accounts 
+	WHERE email_address = _email_address LIMIT 1;
+	
+	IF _account_id IS NULL OR _account_status::text <> 'activated' THEN
+		RAISE EXCEPTION 'SOMETHING WENT WRONG';
+	END IF;
+
+	INSERT INTO authentication.tokens(account, token_type, expires_at, token)
+	VALUES (_account_id, 'reset_password', current_timestamp + (current_setting('app.settings.otp_lifetime_minutes')::integer * interval '1 minute'),to_char(floor(random() * 9999 + 1)::int, 'fm0000')) 
+	RETURNING * INTO _token_data;
+	
+	SELECT id INTO _validate_email_template_id 
+	FROM authentication.email_templates 
+	WHERE token_type='reset_password' LIMIT 1;
+
+	INSERT INTO authentication.outgoing_emails(email_template, _from_,  _to_, doc_tokens, email_status)
+	VALUES ( 
+		_validate_email_template_id, 
+		current_setting('app.settings.app_admin_email'),
+		_email_address,
+		jsonb_build_object(
+				'emailAddress', _email_address,
+				'firstName', _first_name,
+				'lastName', _last_name,
+				'appName', current_setting('app.settings.app_name'),
+				'token', _token_data.token,
+				'tokenExpiry', _token_data.expires_at::text
+			),
+			'awaiting'
+		);		
+
+END;]]></definition>
+</function>
+
+<function name="reset_password"
+		window-func="false"
+		returns-setof="false"
+		behavior-type="CALLED ON NULL INPUT"
+		function-type="VOLATILE"
+		security-type="SECURITY INVOKER"
+		execution-cost="1"
+		row-amount="0">
+	<schema name="public"/>
+	<role name="postgres"/>
+	<language name="plpgsql" sql-disabled="true"/>
+	<return-type>
+	<type name="void" length="0"/>
+	</return-type>
+	<parameter name="_email_address" in="true">
+		<type name="character varying" length="0"/>
+	</parameter>
+	<parameter name="_password" in="true">
+		<type name="character varying" length="0"/>
+	</parameter>
+	<parameter name="_confirm_password" in="true">
+		<type name="character varying" length="0"/>
+	</parameter>
+	<parameter name="_token" in="true">
+		<type name="character varying" length="0"/>
+	</parameter>
+	<definition><![CDATA[DECLARE
+	_account_id bigint;
+	_token_id bigint;	
+	__token character varying;		
+	_expires_at timestamp with time zone;
+	_account_status authentication.account_status;
+BEGIN
+
+	IF _password <> _confirm_password THEN
+		RAISE EXCEPTION 'PASSWORDS DO NOT MATCH';
+	END IF;
+
+	SELECT id, status INTO _account_id, _account_status
+	FROM authentication.accounts 
+	WHERE email_address = _email_address LIMIT 1; 
+	
+	IF _account_id IS NULL OR _account_status::text <> 'activated' THEN
+		RAISE EXCEPTION 'SOMETHING WENT WRONG';
+	END IF;
+
+	SELECT id, token, expires_at INTO _token_id, __token, _expires_at
+	FROM authentication.tokens 
+	WHERE account = _account_id AND token_type = 'reset_password' AND redeemed = false
+	ORDER BY id DESC	
+	LIMIT 1;
+
+	IF __token IS NULL THEN
+		RAISE EXCEPTION 'INVALID RESET TOKEN';	
+	ELSIF _token = __token AND current_timestamp > _expires_at THEN
+		RAISE EXCEPTION 'TOKEN EXPIRED';								
+	ELSIF _token = __token AND current_timestamp < _expires_at THEN		
+		UPDATE authentication.accounts SET _password_ = _password
+		WHERE id = _account_id;		
+		UPDATE authentication.tokens SET redeemed = true
+		WHERE id = _token_id;
+	ELSE		
+		RAISE EXCEPTION 'SOMETHING WENT WRONG WITH RESETTING YOUR PASSWORD';
 	END IF;
 	
 END;]]></definition>
